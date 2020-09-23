@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Unity.Mathematics;
 
 [RequireComponent(typeof(MeshFilter))]
 public class MeshGenerator : MonoBehaviour
@@ -13,6 +14,17 @@ public class MeshGenerator : MonoBehaviour
     private List<Vector3> normals = new List<Vector3>();
     private List<int> indices = new List<int>();
 
+    private const float normalD = 0.001f;
+    private const float marchingCubeSide = 0.28f;
+
+	private const float SIDE = 4f;
+    private const float LEFT = -SIDE;
+    private const float DOWN = -SIDE;
+    private const float TOP = -SIDE;
+    private const float RIGHT = SIDE;
+    private const float UP = SIDE;
+    private const float BOTTOM = SIDE;
+    
     /// <summary>
     /// Executed by Unity upon object initialization. <see cref="https://docs.unity3d.com/Manual/ExecutionOrder.html"/>
     /// </summary>
@@ -65,32 +77,76 @@ public class MeshGenerator : MonoBehaviour
         // ----------------------------------------------------------------
         // Generate mesh here. Below is a sample code of a cube generation.
         // ----------------------------------------------------------------
-
-        // What is going to happen if we don't split the vertices? Check it out by yourself by passing
-        // sourceVertices and sourceTriangles to the mesh.
-        for (int i = 0; i < sourceTriangles.Length; i++)
+        for (float x = LEFT; x < RIGHT; x += marchingCubeSide)
         {
-            indices.Add(vertices.Count);
-            Vector3 vertexPos = cubeVertices[sourceTriangles[i]];
-            
-            //Uncomment for some animation:
-            //vertexPos += new Vector3
-            //(
-            //    Mathf.Sin(Time.time + vertexPos.z),
-            //    Mathf.Sin(Time.time + vertexPos.y),
-            //    Mathf.Sin(Time.time + vertexPos.x)
-            //);
-            
-            vertices.Add(vertexPos);
-        }
+            for (float y = DOWN; y < UP; y += marchingCubeSide)
+            {
+                for (float z = TOP; z < BOTTOM; z += marchingCubeSide)
+                {
+                    Vector3 offset = new Vector3(x, y, z);
+                    Vector3 scale = new Vector3(marchingCubeSide, marchingCubeSide, marchingCubeSide);
 
+                    // Evaluate case number and F values
+                    int caseNumber = 0;
+                    int pow2 = 1;
+                    List<float> FValue = new List<float>();
+                    for (int i = 0; i < cubeVertices.Count; i++)
+                    {
+                        Vector3 vertexPos = Vector3.Scale(cubeVertices[i], scale) + offset;
+                        float value = Field.F(vertexPos);
+                        FValue.Add(value);
+                        if (value > 0)
+                        {
+                            caseNumber += pow2;
+                        }
+                        pow2 *= 2;
+                    }
+                    
+                    int trianglesCount = MarchingCubes.Tables.CaseToTrianglesCount[caseNumber];
+                    for (int triangle = 0; triangle < trianglesCount; triangle++)
+                    {
+                        int3 trinagleEdges = MarchingCubes.Tables.CaseToVertices[caseNumber][triangle];
+                        for (int edge = 0; edge < 3; edge++)
+                        {
+                            int[] vert = MarchingCubes.Tables._cubeEdges[trinagleEdges[edge]];
+                            int v0 = vert[0];
+                            int v1 = vert[1];
+
+                            // Position interpolation
+                            float t = FValue[v1] / (FValue[v1] - FValue[v0]);
+                            Vector3 vertexPos = cubeVertices[v0] * t + cubeVertices[v1] * (1 - t);
+                            vertexPos = Vector3.Scale(vertexPos, scale) + offset;
+
+                            indices.Add(vertices.Count);
+                            vertices.Add(vertexPos);
+							normals.Add(getNormal(vertexPos));
+                        }
+                    }
+                }        
+            }
+        }
+        
+        
         // Here unity automatically assumes that vertices are points and hence (x, y, z) will be represented as (x, y, z, 1) in homogenous coordinates
         _mesh.Clear();
         _mesh.SetVertices(vertices);
         _mesh.SetTriangles(indices, 0);
-        _mesh.RecalculateNormals(); // Use _mesh.SetNormals(normals) instead when you calculate them
+        _mesh.SetNormals(normals); // Use _mesh.SetNormals(normals) instead when you calculate them
 
         // Upload mesh data to the GPU
         _mesh.UploadMeshData(false);
+    }
+
+    public Vector3 getNormal(Vector3 point)
+    {
+        Vector3 dx = new Vector3(normalD, 0, 0);
+        Vector3 dy = new Vector3(0, normalD, 0);
+        Vector3 dz = new Vector3(0, 0, normalD);
+        Vector3 Normal = Vector3.Normalize(new Vector3(
+            Field.F(point + dx) - Field.F(point - dx),
+            Field.F(point + dy) - Field.F(point - dy),
+            Field.F(point + dz) - Field.F(point - dz)
+        ));
+        return -Normal;
     }
 }
