@@ -77,11 +77,8 @@ Shader "Custom/ProjectionShader"
                 // Calculate albedo by projecting _XAlbedo, _YAlbedo, _ZAlbedo on world position. Asjust texel to world space ratio using _Scale.
                 fixed4 xColor = i.normal.x * i.normal.x * tex2D(_XAlbedo, i.wPos.yz * _Scale);
                 fixed4 yColor = i.normal.y * i.normal.y * tex2D(_YAlbedo, i.wPos.xz * _Scale);
-//                fixed4 yColor = i.normal.y * i.normal.y * fixed4(0, 0, 0, 1);
                 fixed4 zColor = i.normal.z * i.normal.z * tex2D(_ZAlbedo, i.wPos.xy * _Scale);
-//                fixed4 zColor = i.normal.z * i.normal.z * fixed4(0, 0, 0, 1);
                 fixed4 albedo = xColor + yColor + zColor;
-//                albedo.xyz = i.normal;
                 
                 return float4(albedo.rgb * getLighting(i), 1);
             }
