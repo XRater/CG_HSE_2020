@@ -91,6 +91,8 @@
 
             fixed4 frag (v2f i) : SV_Target
             {
+                float pi = 3.14159265;
+
                 float3 normal = normalize(i.normal);
                 
                 float3 viewDirection = normalize(_WorldSpaceCameraPos - i.pos.xyz);
@@ -98,10 +100,24 @@
                 // Replace this specular calculation by Montecarlo.
                 // Normalize the BRDF in such a way, that integral over a hemysphere of (BRDF * dot(normal, w')) == 1
                 // TIP: use Random(i) to get a pseudo-random value.
-                float3 viewRefl = reflect(-viewDirection.xyz, normal);
-                float3 specular = SampleColor(viewRefl);
-                
-                return fixed4(specular, 1);
+                float3 color = float3(0, 0, 0);
+                float normConst = 0;
+                for (int i = 0; i < 10000; i++)
+                {
+                    float cosTheta = 2 * Random(2 * i) - 1;
+                    float sinTheta = sqrt(1 - cosTheta * cosTheta);
+                    float alpha = Random(2 * i + 1) * 2 * pi;
+                    float3 w = float3(sinTheta * cos(alpha), cosTheta, sinTheta * sin(alpha));
+
+                    float3 LVal = SampleColor(w);
+                    float fVal = GetSpecularBRDF(viewDirection, w, normal);
+                    float cosT = max(0, dot(normal, w));
+
+                    color += LVal * fVal * cosT;
+                    normConst += fVal * cosT;
+                }
+                color /= normConst;
+                return fixed4(color, 1);
             }
             ENDCG
         }
